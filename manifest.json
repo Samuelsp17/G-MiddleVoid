@@ -1,0 +1,14 @@
+{
+  "manifest_version": 3,
+  "name": "Gemini Pentest Aux",
+  "version": "1.0",
+  "description": "Auxiliar de DevTools para Pentesting com IA",
+  "permissions": [
+    "storage",
+    "activeTab"
+  ],
+  "host_permissions": [
+    "<all_urls>"
+  ],
+  "devtools_page": "devtools.html"
+}
