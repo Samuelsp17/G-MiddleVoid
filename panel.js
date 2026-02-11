@@ -18,90 +18,70 @@ chrome.runtime.onMessage.addListener((msg) => {
     }
 });
 
+// ... (lógica de mensagens e storage anterior)
+
 function renderLog(data, matches) {
     const div = document.createElement('div');
     div.className = 'log-entry';
+    
+    // Gerando o snippet para o botão "Copy as Fetch"
+    const fetchSnippet = `fetch("${data.url}", { method: "${data.method}" });`;
+
     div.innerHTML = `
-        <div><span class="method">[${data.method}]</span> <span class="url">${data.url}</span></div>
-        <div style="color: #ffaa00; margin-top: 3px;">Padrões detectados: ${matches.join(', ')}</div>
+        <div class="log-header">
+            <span class="method">${data.method}</span>
+            <span class="url">${data.url.substring(0, 80)}...</span>
+            <button class="copy-btn" onclick="navigator.clipboard.writeText(\`${fetchSnippet}\`)">Copy Fetch</button>
+        </div>
+        <div class="matches">Padrões: ${matches.join(', ')}</div>
         <button class="ai-btn">Analisar com Gemini</button>
-        <div class="ai-response">Analisando vulnerabilidades...</div>
+        <div class="ai-result-card" style="display:none;"></div>
     `;
 
-    // Botão para chamar a IA (Placeholder por enquanto)
-    div.querySelector('.ai-btn').onclick = () => {
-        const responseDiv = div.querySelector('.ai-response');
-        responseDiv.style.display = 'block';
-        analyzeWithAI(data, responseDiv);
-    };
-
+    div.querySelector('.ai-btn').onclick = () => analyzeWithAI(data, div.querySelector('.ai-result-card'));
     logContainer.prepend(div);
 }
 
-// Função que fará a ponte com a API do Gemini
 async function analyzeWithAI(data, displayElement) {
-    const key = apiKeyInput.value;
-    if (!key) {
-        displayElement.innerText = "ERRO: Insira a API Key!";
-        return;
+    displayElement.style.display = 'block';
+    displayElement.innerHTML = "Processando no Void...";
+    
+    const key = document.getElementById('apiKey').value;
+    
+    // PROMPT PARA JSON ESTRUTURADO (Item 2.1 da sua lista)
+    const prompt = `Analise para Pentest (OWASP Top 10). Responda APENAS JSON:
+    {
+      "score": 0-10,
+      "vulnerabilidade": "nome",
+      "risco": "curto",
+      "poc": "payload",
+      "fix": "como mitigar, explicado de forma simples para inciantes"
     }
-
-    // Encurtamos para evitar estouro de contexto
-    const shortBody = data.body.substring(0, 3000); 
-
-    // Prompt otimizado para economia de tokens e Score específico
-    const prompt = `Analise este tráfego de rede para pentest. 
-    Responda EXATAMENTE neste formato, sendo muito breve:
-    SCORE: [0-10] [O que é o achado]
-    RESUMO: [1 frase sobre o que é]
-    RISCO: [1 frase sobre a falha]
-    POC: [payload curto ou comando]
-    Explicação de exploração: [O que colocar na aba "Console" para saber se a vulnerabilidade é explorável, explicando de maneira simplificada como explica para um iniciante na área.]
-
-    Use a escala:
-    0-4: Info importante, sem vulnerabilidade.
-    4-6: Info crítica, sem vulnerabilidade clara.
-    6-8: Suspeito, requer exploração ativa.
-    8-10: Vulnerabilidade explorável detectada.
-
-    Dados: ${data.method} ${data.url} | Body: ${shortBody}
-    
-    Não invente dados, nem vulnerabilidade. Não deduza Vulnerabildiade se você não tem certeza.`;
-
-    
+    Dados: ${data.method} ${data.url} | Body: ${data.body.substring(0, 1000)}`;
 
     try {
-        // ATUALIZADO PARA O MODELO GEMINI 2.0 FLASH
-        const urlAPI = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${key}`;
-
-        const response = await fetch(urlAPI, {
+        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${key}`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                contents: [{ parts: [{ text: prompt }] }]
-            })
+            body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
         });
 
-        const json = await response.json();
-        console.log("DEBUG API (Gemini 2.5):", json);
+        const resData = await response.json();
+        const content = resData.candidates[0].content.parts[0].text;
+        
+        // Parsing do JSON da IA
+        const report = JSON.parse(content.replace(/```json|```/g, ""));
 
-        if (json.error) {
-            displayElement.innerText = "Erro da API: " + json.error.message;
-            return;
-        }
+        // ESTILIZAÇÃO POR SCORE (Item 3.3 da sua lista)
+        const scoreColor = report.score > 7 ? "#ff4c4c" : (report.score > 4 ? "#ffaa00" : "#00ff41");
 
-        if (json.candidates && json.candidates[0].finishReason === "SAFETY") {
-            displayElement.innerText = "⚠️ Bloqueado por filtros de segurança. Tente um alvo menos explícito.";
-            return;
-        }
-
-        if (json.candidates && json.candidates[0].content) {
-            displayElement.innerText = json.candidates[0].content.parts[0].text;
-            displayElement.style.color = "#00ff41"; 
-        } else {
-            displayElement.innerText = "A API retornou um formato inesperado.";
-        }
-    } catch (error) {
-        displayElement.innerText = "Erro de conexão: " + error.message;
+        displayElement.innerHTML = `
+            <div style="border-left: 4px solid ${scoreColor}; padding: 10px;">
+                <b style="color:${scoreColor}">SCORE: ${report.score} - ${report.vulnerabilidade}</b>
+                <p><b>Risco:</b> ${report.risco}</p>
+                <code>PoC: ${report.poc}</code>
+            </div>
+        `;
+    } catch (e) {
+        displayElement.innerText = "Erro na análise: " + e.message;
     }
 }

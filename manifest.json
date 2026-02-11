@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
-  "name": "Gemini Pentest Aux",
-  "version": "1.0",
-  "description": "Auxiliar de DevTools para Pentesting com IA",
+  "name": "G-MiddleVoid",
+  "version": "1.1",
+  "description": "IA-Powered Network Pentest Assistant",
   "permissions": [
     "storage",
     "activeTab"

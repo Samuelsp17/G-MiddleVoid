@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <style>
+        body { font-family: sans-serif; background: #1e1e1e; color: #ccc; }
+        .log-entry { border: 1px solid #444; padding: 10px; margin-bottom: 5px; border-radius: 4px; }
+        .method { color: #569cd6; font-weight: bold; margin-right: 5px; }
+        .url { color: #ce9178; word-break: break-all; }
+        .ai-btn { background: #007acc; color: white; border: none; padding: 5px 10px; cursor: pointer; margin-top: 10px; }
+        .copy-btn { background: #444; color: #fff; border: none; font-size: 10px; margin-left: 10px; cursor: pointer; }
+        .ai-result-card { background: #252526; padding: 10px; margin-top: 10px; border-left: 4px solid #00ff41; }
+    </style>
+</head>
+<body>
+    <div style="padding: 10px; border-bottom: 1px solid #444;">
+        <input type="password" id="apiKey" placeholder="Gemini API Key" style="width: 200px;">
+        <input type="text" id="keywords" placeholder="Keywords (admin, token...)" style="width: 200px;">
+    </div>
+    <div id="log-container"></div>
+    <script src="panel.js"></script>
+</body>
+</html>
