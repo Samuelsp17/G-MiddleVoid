@@ -113,7 +113,7 @@ async function analyzeWithAI(data, display) {
       "critico": "O que foi achado de sensível (cookies/senhas)",
       "poc": "Payload de teste",
       "exploracao": "Passo a passo, explicação para iniciantes",
-      "risco": "Descrição curta do risco"
+      "risco": "Descrição curta do risco (para um iniciante)"
     }
     Não invente dados, trabalhe com certeza. Não aponte uma vulnerabilidade sem que você tenha certeza.`
     ; 
