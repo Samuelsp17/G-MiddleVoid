@@ -2,6 +2,10 @@ const logContainer = document.getElementById('log-container');
 const keywordsInput = document.getElementById('keywords');
 const apiKeyInput = document.getElementById('apiKey');
 
+// Função para limpar a tela
+clearBtn.onclick = () => {
+    logContainer.innerHTML = '';
+};
 console.log("G-MiddleVoid: Painel carregado e aguardando dados...");
 
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
@@ -110,11 +114,13 @@ async function analyzeWithAI(data, display) {
       "poc": "Payload de teste",
       "exploracao": "Passo a passo, explicação para iniciantes",
       "risco": "Descrição curta do risco"
-    }`; 
+    }
+    Não invente dados, trabalhe com certeza. Não aponte uma vulnerabilidade sem que você tenha certeza.`
+    ; 
 
     try {
         // CORRIGIDO: URL do modelo ajustada para 2.0 Flash (ou use 1.5-flash se preferir)
-        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${key}`, {
+        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${key}`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })

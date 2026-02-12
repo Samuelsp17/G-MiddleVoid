@@ -13,11 +13,12 @@
     </style>
 </head>
 <body>
-    <div style="padding: 10px; border-bottom: 1px solid #444;">
-        <input type="password" id="apiKey" placeholder="Gemini API Key" style="width: 200px;">
-        <input type="text" id="keywords" placeholder="Keywords (admin, token...)" style="width: 200px;">
-    </div>
-    <div id="log-container"></div>
+    <div style="padding: 10px; border-bottom: 1px solid #444; display: flex; gap: 10px; align-items: center;">
+    <input type="password" id="apiKey" placeholder="Gemini API Key" style="width: 150px;">
+    <input type="text" id="keywords" placeholder="Keywords (admin, token...)" style="width: 150px;">
+    <button id="clearBtn" style="background: #292727; color: white; border: none; padding: 5px 10px; cursor: pointer; border-radius: 4px;">Limpar Logs</button>
+</div>
+<div id="log-container"></div>
     <script src="panel.js"></script>
 </body>
 </html>
