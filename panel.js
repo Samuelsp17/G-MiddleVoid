@@ -1,73 +1,50 @@
 const logContainer = document.getElementById('log-container');
 const keywordsInput = document.getElementById('keywords');
 const apiKeyInput = document.getElementById('apiKey');
+const clearBtn = document.getElementById('clearBtn');
 
-// Função para limpar a tela
+// 1. Função para limpar a tela
 clearBtn.onclick = () => {
     logContainer.innerHTML = '';
 };
-console.log("G-MiddleVoid: Painel carregado e aguardando dados...");
 
-chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
-    console.log("Mensagem recebida no Panel:", msg); // DEBUG
-    if (msg.type === "NETWORK_CAPTURE") {
-        renderLog(msg);
-    }
-});
-
-// Escuta as mensagens enviadas pelo devtools.js
+// 2. ÚNICO LISTENER: Gerencia a chegada de dados e aplica o filtro
 chrome.runtime.onMessage.addListener((msg) => {
     if (msg.type === "NETWORK_CAPTURE") {
         const keywordsRaw = keywordsInput.value.trim();
         
-        // Se não houver keywords, mostra tudo. Se houver, filtra.
+        // Se o campo de Keywords estiver vazio, mostra tudo
         if (keywordsRaw === "") {
-            renderLog(msg);
+            renderLog(msg, []); 
         } else {
             const keywords = keywordsRaw.split(',').map(k => k.trim().toLowerCase());
             const contentLower = (msg.body || "").toLowerCase();
             const urlLower = msg.url.toLowerCase();
-            const found = keywords.filter(k => contentLower.includes(k) || urlLower.includes(k));
 
-            if (found.length > 0) {
-                renderLog(msg);
+            // Verifica se alguma palavra-chave existe na URL ou no Corpo
+            const matches = keywords.filter(k => contentLower.includes(k) || urlLower.includes(k));
+
+            // SÓ renderiza se encontrar os termos (Filtro Ativo)
+            if (matches.length > 0) {
+                renderLog(msg, matches);
             }
         }
     }
 });
 
-// Função para tentar decodificar Base64 de forma segura
-function tryDecode(str) {
-    try {
-        // Verifica se parece Base64 antes de tentar
-        if (/^([A-Za-z0-9+/]{4})*([A-Za-z0-9+/]{3}=|[A-Za-z0-9+/]{2}==)?$/.test(str) && str.length > 4) {
-            return atob(str);
-        }
-    } catch (e) {}
-    return str;
-}
-
-// Analisador de "Hidden Patterns" (Arquivos ocultos ou nomes curtos suspeitos)
-function findHiddenPatterns(url) {
-    const parts = url.split('/');
-    const lastPart = parts[parts.length - 1];
-    
-    // Detecta arquivos com nomes de uma única letra (ex: /a, /z) ou nomes comuns de admin ocultos
-    if (lastPart.length === 1 || /^(adm|cfg|bkp|v1|v2)$/i.test(lastPart)) {
-        return `SUSPEITA: Caminho curto detectado (${lastPart}). Pode ser um endpoint oculto.`;
-    }
-    return null;
-}
-
-function renderLog(data) {
+// 3. FUNÇÃO RENDERLOG ÚNICA: Adiciona badge visual para os termos encontrados
+function renderLog(data, matches = []) {
     const div = document.createElement('div');
     div.className = 'log-entry';
     
-    // Verifica se há algo suspeito na URL imediatamente
     const patternAlert = findHiddenPatterns(data.url);
     const alertStyle = patternAlert ? "border: 1px solid #ffaa00; background: #332200;" : "";
-
     div.setAttribute("style", alertStyle);
+
+    // Badge para mostrar qual termo ativou o filtro
+    const matchBadge = matches.length > 0 
+        ? `<div style="color: #00ff41; font-size: 10px; margin-top: 5px; font-weight: bold;">🎯 TERMOS: ${matches.join(', ')}</div>` 
+        : '';
 
     div.innerHTML = `
         <div>
@@ -75,6 +52,7 @@ function renderLog(data) {
             <span class="url">${data.url}</span>
             <button class="copy-btn" onclick="navigator.clipboard.writeText(\`${data.url}\`)">Copy URL</button>
         </div>
+        ${matchBadge}
         ${patternAlert ? `<div style="color:#ffaa00; font-size:10px;">⚠️ ${patternAlert}</div>` : ''}
         <button class="ai-btn">Analisar com G-MiddleVoid</button>
         <div class="ai-result-card" style="display:none;"></div>
@@ -84,42 +62,43 @@ function renderLog(data) {
     logContainer.prepend(div);
 }
 
+// 4. FUNÇÕES DE APOIO (Decodificação e Padrões Ocultos)
+function tryDecode(str) {
+    try {
+        if (/^([A-Za-z0-9+/]{4})*([A-Za-z0-9+/]{3}=|[A-Za-z0-9+/]{2}==)?$/.test(str) && str.length > 4) {
+            return atob(str);
+        }
+    } catch (e) {}
+    return str;
+}
+
+function findHiddenPatterns(url) {
+    const parts = url.split('/');
+    const lastPart = parts[parts.length - 1];
+    if (lastPart.length === 1 || /^(adm|cfg|bkp|v1|v2)$/i.test(lastPart)) {
+        return `SUSPEITA: Caminho curto detectado (${lastPart}). Pode ser um endpoint oculto.`;
+    }
+    return null;
+}
+
+// 5. ANÁLISE COM IA (Gemini)
 async function analyzeWithAI(data, display) {
     display.style.display = 'block';
-    display.innerHTML = "Void Scanning: Analisando Headers, Cookies e Payloads...";
+    display.innerHTML = "Void Scanning: Analisando tráfego...";
 
     const decodedBody = tryDecode(data.body);
-    const hiddenAlert = findHiddenPatterns(data.url);
-    const key = apiKeyInput.value; // Puxando a chave do input global
-
-    // CORRIGIDO: O prompt agora fecha corretamente e o JSON está limpo
+    const key = apiKeyInput.value.trim();
     const prompt = `Aja como um Pentester Especialista. Analise este tráfego buscando:
-    1. Vulnerabilidades em Cookies (Missing HttpOnly/Secure, Session Fixation).
-    2. Passwords ou Tokens expostos no Body ou Headers.
-    3. Endpoints ocultos ou suspeitos.
+    1. Vulnerabilidades em Cookies (Missing HttpOnly/Secure).
+    2. Passwords ou Tokens expostos.
+    3. Endpoints ocultos.
     4. OWASP Top 10.
-
-    DADOS TÉCNICOS:
-    URL: ${data.url}
-    MÉTODO: ${data.method}
-    HEADERS: ${JSON.stringify(data.requestHeaders)}
-    BODY: ${decodedBody}
-    ${hiddenAlert ? `ALERTA ESTRUTURAL: ${hiddenAlert}` : ''}
-
-    Responda APENAS em JSON:
-    {
-      "score": 0-10,
-      "vulnerabilidade": "Nome",
-      "critico": "O que foi achado de sensível (cookies/senhas)",
-      "poc": "Payload de teste",
-      "exploracao": "Passo a passo, explicação para iniciantes",
-      "risco": "Descrição curta do risco (para um iniciante)"
-    }
-    Não invente dados, trabalhe com certeza. Não aponte uma vulnerabilidade sem que você tenha certeza.`
-    ; 
+    5. Não invente dados. Se não souber, diga que não encontrou nada.
+    6. A explicação da exploração deve ser clara para um iniciante entender.
+    DADOS: URL: ${data.url} | Headers: ${JSON.stringify(data.requestHeaders)} | Body: ${decodedBody}
+    Responda APENAS em JSON: {"score": 0-10, "vulnerabilidade": "Nome", "critico": "Achado", "poc": "Payload", "exploracao": "Passos", "risco": "Descrição"}`; 
 
     try {
-        // CORRIGIDO: URL do modelo ajustada para 2.0 Flash (ou use 1.5-flash se preferir)
         const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${key}`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -127,29 +106,37 @@ async function analyzeWithAI(data, display) {
         });
 
         const resData = await response.json();
-        
-        if (resData.error) throw new Error(resData.error.message);
+        if (!resData.candidates) throw new Error("Resposta inválida da API.");
 
-        const content = resData.candidates[0].content.parts[0].text;
-        
-        // Limpeza de Markdown se a IA teimar em colocar
-        const cleanJson = content.replace(/```json|```/g, "").trim();
-        const report = JSON.parse(cleanJson);
+        let content = resData.candidates[0].content.parts[0].text;
 
-        // CORRIGIDO: Usando a variável 'display' (que veio no argumento) e 'report.risco'
+        // LIMPEZA DE EMERGÊNCIA: Remove blocos de código markdown e espaços extras
+        content = content.replace(/```json|```/g, "").trim();
+
+        // TENTA CORRIGIR QUEBRAS DE LINHA DENTRO DE STRINGS JSON
+        content = content.replace(/\n/g, " "); 
+
+        const report = JSON.parse(content);
+
         const scoreColor = report.score > 7 ? "#ff4c4c" : (report.score > 4 ? "#ffaa00" : "#00ff41");
 
         display.innerHTML = `
             <div style="border-left: 4px solid ${scoreColor}; padding: 10px; background: #252526;">
                 <b style="color:${scoreColor}">SCORE: ${report.score} - ${report.vulnerabilidade}</b>
-                <p style="color: #ffaa00; font-size: 0.9em;"><b>Achado Crítico:</b> ${report.critico}</p>
+                <p><b>Crítico:</b> ${report.critico}</p>
                 <p><b>Risco:</b> ${report.risco}</p>
-                <code style="display:block; background:#000; padding:5px; color:#fff;">PoC: ${report.poc}</code>
-                <p style="font-size: 0.8em; color: #888;"><b>Como explorar:</b> ${report.exploracao}</p>
+                <code style="display:block; background:#000; padding:5px; color:#00ff41; margin-top:5px;">PoC: ${report.poc}</code>
+                <p style="font-size:0.8em; margin-top:10px;"><b>Exploração:</b> ${report.exploracao}</p>
             </div>
         `;
     } catch (e) {
-        display.innerText = "Erro na análise: " + e.message;
-        console.error("Erro completo:", e);
+        display.innerHTML = `
+            <div style="color: #ff4c4c;">
+                <b>Erro de Formatação:</b> A IA gerou um JSON inválido. <br>
+                <button id="retryBtn" style="background:#444; color:#fff; border:none; padding:5px; cursor:pointer;">Tentar Novamente</button>
+                <details><summary>Ver log bruto</summary>${e.message}</details>
+            </div>
+        `;
+        display.querySelector('#retryBtn').onclick = () => analyzeWithAI(data, display);
     }
 }
