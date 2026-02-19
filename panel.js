@@ -88,6 +88,10 @@ async function analyzeWithAI(data, display) {
 
     const decodedBody = tryDecode(data.body);
     const key = apiKeyInput.value.trim();
+    
+    // Mantendo a versão 2.5-flash conforme solicitado
+    const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${key}`;
+
     const prompt = `Aja como um Pentester Especialista. Analise este tráfego buscando:
     1. Vulnerabilidades em Cookies (Missing HttpOnly/Secure).
     2. Passwords ou Tokens expostos.
@@ -99,23 +103,27 @@ async function analyzeWithAI(data, display) {
     Responda APENAS em JSON: {"score": 0-10, "vulnerabilidade": "Nome", "critico": "Achado", "poc": "Payload", "exploracao": "Passos", "risco": "Descrição"}`; 
 
     try {
-        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${key}`, {
+        const response = await fetch(apiUrl, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
+            body: JSON.stringify({
+                contents: [{ parts: [{ text: prompt }] }],
+                // Esta configuração força a IA a entregar um JSON puro e válido
+                generationConfig: {
+                    response_mime_type: "application/json"
+                }
+            })
         });
 
         const resData = await response.json();
-        if (!resData.candidates) throw new Error("Resposta inválida da API.");
+        
+        if (!resData.candidates || resData.candidates.length === 0) {
+            throw new Error("A IA não retornou candidatos. Verifique sua cota ou chave.");
+        }
 
-        let content = resData.candidates[0].content.parts[0].text;
+        const content = resData.candidates[0].content.parts[0].text;
 
-        // LIMPEZA DE EMERGÊNCIA: Remove blocos de código markdown e espaços extras
-        content = content.replace(/```json|```/g, "").trim();
-
-        // TENTA CORRIGIR QUEBRAS DE LINHA DENTRO DE STRINGS JSON
-        content = content.replace(/\n/g, " "); 
-
+        // O parse agora será bem-sucedido pois o MIME type garante a estrutura
         const report = JSON.parse(content);
 
         const scoreColor = report.score > 7 ? "#ff4c4c" : (report.score > 4 ? "#ffaa00" : "#00ff41");
@@ -125,16 +133,15 @@ async function analyzeWithAI(data, display) {
                 <b style="color:${scoreColor}">SCORE: ${report.score} - ${report.vulnerabilidade}</b>
                 <p><b>Crítico:</b> ${report.critico}</p>
                 <p><b>Risco:</b> ${report.risco}</p>
-                <code style="display:block; background:#000; padding:5px; color:#00ff41; margin-top:5px;">PoC: ${report.poc}</code>
+                <code style="display:block; background:#000; padding:5px; color:#00ff41; margin-top:5px; white-space: pre-wrap;">PoC: ${report.poc}</code>
                 <p style="font-size:0.8em; margin-top:10px;"><b>Exploração:</b> ${report.exploracao}</p>
             </div>
         `;
     } catch (e) {
         display.innerHTML = `
-            <div style="color: #ff4c4c;">
-                <b>Erro de Formatação:</b> A IA gerou um JSON inválido. <br>
-                <button id="retryBtn" style="background:#444; color:#fff; border:none; padding:5px; cursor:pointer;">Tentar Novamente</button>
-                <details><summary>Ver log bruto</summary>${e.message}</details>
+            <div style="color: #ff4c4c; padding: 10px; background: #301010; border-radius: 4px;">
+                <b>Erro de Processamento:</b> ${e.message} <br>
+                <button id="retryBtn" style="background:#444; color:#fff; border:none; padding:5px; cursor:pointer; margin-top:10px;">Tentar Novamente</button>
             </div>
         `;
         display.querySelector('#retryBtn').onclick = () => analyzeWithAI(data, display);
